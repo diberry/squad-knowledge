@@ -1,93 +1,262 @@
-# Squad SDK Knowledge Operations
+# Squad Knowledge Operations
 
-**Skill Governance + Memory Search for AI Agent Teams**
+**Automated Skill Governance for AI Agent Teams**
 
-Squad Knowledge Operations combines skill discovery, approval workflows, and intelligent memory search into a unified knowledge management system. It enables AI teams to automatically discover patterns from accumulated agent histories, review and approve new skills, track skill confidence through reuse, and search across team memory with attribution.
+Extract patterns from agent team histories, approve new skills, and search across team memory—all through a unified workflow. Knowledge Operations automatically discovers repeated best practices, manages skill approval, and enables full-text search with source attribution.
 
-> **Note:** This project demonstrates patterns and algorithms for Squad SDK skill governance (pattern extraction, approval workflows, confidence tracking, memory search). It does not directly import or depend on `@bradygaster/squad-sdk` at runtime. The code is designed so these modules can be integrated into a Squad SDK project as building blocks.
+> **Note:** This project is a pattern example for Squad SDK skill governance. It does not import `@bradygaster/squad-sdk` at runtime—modules are standalone and designed for integration into Squad SDK projects.
 
-## Features
+## Using This Example
 
-- **📊 Pattern Extraction**: Extract repeated phrases and patterns from agent histories with frequency analysis and noise filtering
-- **🎯 Skill Candidate Generation**: Automatically generate skill candidates from discovered patterns with deduplication against existing skills
-- **✅ Approval Workflow**: Review pending candidates with agent context and approval/rejection tracking
-- **📝 SKILL.md Generation**: Auto-generate well-structured SKILL.md files with agent attribution and confidence tags
-- **📈 Confidence Tracking**: Track skill usage across sessions and automatically upgrade confidence levels
-- **🔍 Memory Search**: Full-text search across agent histories and decisions with relevance ranking and source attribution
-- **⏱️ Staleness Detection**: Identify and flag outdated knowledge not referenced in recent sessions
-- **🎭 End-to-End Orchestration**: Coordinate pattern discovery through approval and skill generation pipeline
+### Installation
+
+```bash
+git clone https://github.com/bradygaster/project-squad-sdk-example-knowledge.git
+cd project-squad-sdk-example-knowledge
+npm install
+npm run build
+```
+
+### Pattern Discovery Workflow
+
+Follow these **four configuration-first steps** with your own `.squad/` history and decision files:
+
+#### Step 1: Prepare Sample History Files
+
+Create a `.squad/` directory with sample agent history data:
+
+```bash
+mkdir -p .squad/agent-histories .squad/decisions
+```
+
+**`.squad/agent-histories/alice.txt`** — Agent Alice's history log:
+```
+Session 1: Check for null pointers before property access
+Session 2: Always validate input early in the process
+Session 3: Check for null pointers before property access
+Session 4: Use async/await for I/O operations
+Session 5: Check for null pointers before property access
+```
+
+**`.squad/agent-histories/bob.txt`** — Agent Bob's history log:
+```
+Session 1: Always validate input early in the process
+Session 2: Use async/await for I/O operations
+Session 3: Check for null pointers before property access
+Session 4: Log errors with full context for debugging
+Session 5: Prefer immutable data structures
+```
+
+**`.squad/decisions/2024-01-15-error-handling.md`** — Team decision log:
+```markdown
+# Decision: Error Handling Strategy
+
+Date: 2024-01-15
+Author: team-lead
+
+Always wrap I/O operations in try-catch blocks.
+Log errors with full context including stack traces.
+Use custom error classes for domain-specific errors.
+```
+
+#### Step 2: Run Pattern Discovery
+
+```bash
+# Discover patterns in agent histories
+node dist/pattern-extractor.js .squad/agent-histories
+
+# Generate skill candidates from patterns
+node dist/skill-candidate-generator.js .squad/agent-histories
+```
+
+**Expected output:**
+```
+Found 8 patterns:
+  • "check for null pointers" (5 occurrences, 3 agents)
+  • "validate input early" (4 occurrences, 2 agents)
+  • "use async/await" (3 occurrences, 2 agents)
+
+Generated 5 skill candidates
+```
+
+#### Step 3: Review and Approve Candidates
+
+```bash
+# List pending candidates for review
+node dist/list-candidates.js
+
+# Approve a skill candidate
+node dist/approve-candidate.js <candidate-id>
+
+# Reject a candidate with reason
+node dist/reject-candidate.js <candidate-id> "Pattern too vague"
+```
+
+**Expected output:**
+```
+Pending Candidates:
+[abc12345] Check For Null Pointers (confidence: low) — agents: alice, bob, charlie
+[def67890] Validate Input Early (confidence: low) — agents: alice, bob
+[ghi11111] Use Async/Await For I/O (confidence: low) — agents: bob, charlie
+
+✅ Candidate abc12345 approved.
+Generated SKILL.md at .squad/skills/check-for-null-pointers.md
+```
+
+#### Step 4: Search Team Memory
+
+```bash
+# Index all agent histories and decisions
+node dist/build-memory-index.js .squad/
+
+# Search across team memory
+node dist/search-memory.js "error handling patterns"
+```
+
+**Expected output:**
+```
+Found 3 results:
+
+1. Relevance: 92%
+   Source: alice (agent_history) — 2024-01-14
+   Matched: error, handling, patterns
+   "Always wrap I/O operations in try-catch blocks..."
+
+2. Relevance: 76%
+   Source: decisions — 2024-01-12
+   Matched: error, handling
+   "Decision: Standardize error handling across services..."
+
+3. Relevance: 61%
+   Source: bob (agent_history) — 2024-01-10
+   Matched: patterns
+   ⚠️  STALE: Not referenced in last 15 sessions
+   "Consider wrapping third-party errors..."
+```
+
+### Output — No Code Required
+
+All outputs are:
+- **SKILL.md files** in `.squad/skills/` with frontmatter and agent attribution
+- **Search results** with relevance scores and source links
+- **Staleness reports** flagging outdated patterns
+- **Approval queue** tracking pending/approved candidates
+
+No custom code or API imports needed to use the workflow.
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────┐
-│          Squad SDK Knowledge Operations                 │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  Phase 1: Discovery         Phase 2: Governance        │
-│  ┌──────────────────┐      ┌──────────────────────┐   │
-│  │ Pattern          │      │ SKILL.md             │   │
-│  │ Extractor   ────┼────► │ Generator            │   │
-│  └──────────────────┘      │                      │   │
-│           │                │ Confidence Tracker   │   │
-│           ▼                └──────────────────────┘   │
-│  ┌──────────────────┐                 │               │
-│  │ Skill Candidate  │      ┌──────────▼──────────┐   │
-│  │ Generator   ────┼────► │ Approval Queue       │   │
-│  └──────────────────┘      └──────────────────────┘   │
-│                                                         │
-│  Phase 3: Search            Phase 4: Orchestration    │
-│  ┌──────────────────┐      ┌──────────────────────┐   │
-│  │ Memory Indexer   │      │ Knowledge            │   │
-│  │              ───┼────► │ Orchestrator    ────┐│   │
-│  └──────────────────┘      │                    │└   │
-│           │                └──────────────────────┘   │
-│           ▼                                             │
-│  ┌──────────────────┐                                  │
-│  │ Memory Search    │                                  │
-│  │ Staleness        │                                  │
-│  │ Detector         │                                  │
-│  └──────────────────┘                                  │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
+## Extending This Example
+
+### Adding Custom Pattern Extractors
+
+Extend the base pattern extractor to recognize domain-specific phrases:
+
+```typescript
+import { PatternExtractor } from 'project-squad-sdk-example-knowledge';
+
+class DomainPatternExtractor extends PatternExtractor {
+  protected async preprocessText(text: string): Promise<string> {
+    // Custom tokenization for your domain (e.g., SQL queries, API calls)
+    return text.toLowerCase().replace(/my_domain_specific_pattern/g, 'DOMAIN_TOKEN');
+  }
+
+  async extractPatterns(histories: string[]) {
+    const standard = await super.extractPatterns(histories);
+    const domain = this.findDomainPatterns(histories);
+    return [...standard, ...domain];
+  }
+
+  private findDomainPatterns(histories: string[]) {
+    // Your custom extraction logic here
+    return [];
+  }
+}
 ```
 
-## SDK Modules
+### Integrating with Real Squad State Files
 
-| Module | Purpose | Status |
-|--------|---------|--------|
-| `PatternExtractor` | Extract n-grams and repeated phrases from histories | Implemented |
-| `SkillCandidateGenerator` | Generate skill candidates from patterns with deduplication | Implemented |
-| `ApprovalQueue` | Manage pending/approved candidate workflow | Implemented |
-| `SkillMdGenerator` | Generate SKILL.md files with frontmatter and attribution | Implemented |
-| `ConfidenceTracker` | Track skill reuse count and upgrade confidence levels | Implemented |
-| `MemoryIndexer` | Index agent histories and decisions for search | Implemented |
-| `MemorySearchEngine` | Search indexed memory with relevance ranking | Implemented |
-| `StalenessDetector` | Detect and flag outdated knowledge | Implemented |
-| `KnowledgeOrchestrator` | Coordinate full discovery→approval→generation pipeline | Implemented |
+Load actual `.squad/` history and decision files:
+
+```typescript
+import fs from 'fs/promises';
+import { PatternExtractor, KnowledgeOrchestrator } from 'project-squad-sdk-example-knowledge';
+
+async function loadSquadHistory(squadDir: string) {
+  const historyDir = `${squadDir}/agent-histories`;
+  const files = await fs.readdir(historyDir);
+  
+  const histories: string[] = [];
+  for (const file of files) {
+    if (file.endsWith('.txt')) {
+      const content = await fs.readFile(`${historyDir}/${file}`, 'utf-8');
+      histories.push(content);
+    }
+  }
+  
+  return histories;
+}
+
+// Then run the orchestrator
+const histories = await loadSquadHistory('.squad');
+const orchestrator = new KnowledgeOrchestrator();
+const state = await orchestrator.runFullPipeline(histories);
+```
+
+### Programmatic API
+
+Use Knowledge Operations components directly in your SDK integration:
+
+```typescript
+import {
+  PatternExtractor,
+  SkillCandidateGenerator,
+  MemoryIndexer,
+  MemorySearchEngine,
+  KnowledgeOrchestrator,
+} from 'project-squad-sdk-example-knowledge';
+
+// Phase 1: Discovery
+const extractor = new PatternExtractor({ minFrequency: 3 });
+const patterns = await extractor.extractPatterns(histories);
+
+// Phase 2: Generation
+const generator = new SkillCandidateGenerator();
+const candidates = await generator.generateCandidates(patterns);
+
+// Phase 3: Search
+const indexer = new MemoryIndexer();
+const index = indexer.indexAgentHistories(agentHistories);
+const search = new MemorySearchEngine();
+const results = search.search('error handling', index, 10);
+
+// Phase 4: Orchestration (all together)
+const orchestrator = new KnowledgeOrchestrator();
+const state = await orchestrator.runFullPipeline(entries, metadata);
+```
 
 ## Project Structure
 
 ```
 project-squad-sdk-example-knowledge/
-├── README.md                    # This file
-├── QUICKSTART.md               # Getting started guide
-├── PLAN.md                     # Detailed implementation plan
-├── package.json                # Project configuration
-├── tsconfig.json               # TypeScript configuration
+├── README.md                         # This file
+├── QUICKSTART.md                     # Configuration-first setup guide
+├── PLAN.md                           # Implementation plan
+├── package.json                      # Dependencies and scripts
+├── tsconfig.json                     # TypeScript configuration
 ├── src/
-│   ├── index.ts               # Main exports
-│   ├── types.ts               # Core type definitions
-│   ├── pattern-extractor.ts   # Pattern discovery from histories
-│   ├── skill-candidate-generator.ts  # Generate candidates
-│   ├── approval-queue.ts      # Manage candidate workflow
-│   ├── skill-md-generator.ts  # Generate SKILL.md files
-│   ├── confidence-tracker.ts  # Track skill confidence
-│   ├── memory-indexer.ts      # Index agent memory
-│   ├── memory-search.ts       # Search and rank results
-│   ├── staleness-detector.ts  # Detect outdated knowledge
-│   ├── orchestrator.ts        # End-to-end workflow
-│   └── cli.ts                 # CLI interface
+│   ├── index.ts                      # Main exports
+│   ├── types.ts                      # Type definitions
+│   ├── pattern-extractor.ts          # Pattern discovery
+│   ├── skill-candidate-generator.ts  # Candidate generation
+│   ├── approval-queue.ts             # Approval workflow
+│   ├── skill-md-generator.ts         # SKILL.md generation
+│   ├── confidence-tracker.ts         # Confidence tracking
+│   ├── memory-indexer.ts             # Memory indexing
+│   ├── memory-search.ts              # Search and ranking
+│   ├── staleness-detector.ts         # Staleness detection
+│   ├── orchestrator.ts               # End-to-end pipeline
+│   └── cli.ts                        # CLI interface
 └── test/
     ├── pattern-extractor.test.ts
     ├── skill-candidate-generator.test.ts
@@ -103,175 +272,61 @@ project-squad-sdk-example-knowledge/
     └── edge-cases.test.ts
 ```
 
-## Installation
+## SDK Modules
 
-### Prerequisites
-
-- **Node.js** 18+ or later
-- **npm** 9+
-
-### Setup
-
-```bash
-# Clone the repository
-git clone <repository-url>
-cd project-squad-sdk-example-knowledge
-
-# Install dependencies
-npm install
-
-# Build the project
-npm run build
-
-# Run tests
-npm run test
-
-# Watch mode for development
-npm run test:watch
-```
-
-## Configuration
-
-The Knowledge Operations module is configured through initialization of each component:
-
-```typescript
-import {
-  PatternExtractor,
-  SkillCandidateGenerator,
-  KnowledgeOrchestrator,
-  MemorySearchEngine,
-} from 'project-squad-sdk-example-knowledge';
-
-// Initialize components
-const patterns = new PatternExtractor();
-const candidates = new SkillCandidateGenerator();
-const orchestrator = new KnowledgeOrchestrator();
-
-// Run the full pipeline
-const state = await orchestrator.runFullPipeline(entries, metadata);
-```
-
-### Configuration Options
-
-- **Minimum Pattern Frequency** (default: 3): How many times a pattern must appear before extraction
-- **Confidence Thresholds**: Upgrade skills to "medium" confidence after 3+ independent reuses
-- **Staleness Window** (default: 20 sessions): Mark knowledge as stale if not referenced within window
-- **Search Result Limit** (default: 10): Maximum search results returned per query
-
-See individual module documentation for detailed configuration.
-
-## How to Use
-
-### Quick Start
-
-See [QUICKSTART.md](./QUICKSTART.md) for step-by-step guides:
-
-1. **Discover Your First Skill** — Extract patterns from history files and approve a skill candidate
-2. **Search Agent Memory** — Find knowledge across team history with attribution
-3. **Track Skill Confidence** — Monitor skill reuse and confidence upgrades
-
-### Example: Pattern Discovery and Skill Approval
-
-```typescript
-import { KnowledgeOrchestrator } from 'project-squad-sdk-example-knowledge';
-
-// Run the full discovery pipeline
-const state = await orchestrator.runFullPipeline(entries, metadata);
-console.log(`Found ${state.candidates.length} skill candidates`);
-
-// Review approved skills
-for (const skill of state.approvedSkills) {
-  console.log(`Title: ${skill.title}`);
-  console.log(`Agents: ${skill.agents.join(', ')}`);
-}
-```
-
-### Example: Search Agent Memory
-
-```typescript
-import { MemoryIndexer, MemorySearchEngine } from 'project-squad-sdk-example-knowledge';
-
-// Index all agent history and decisions
-const indexer = new MemoryIndexer();
-const histories = new Map<string, string[]>();
-histories.set('alice', ['always check for null before accessing properties']);
-const index = indexer.indexAgentHistories(histories);
-
-// Search for knowledge
-const search = new MemorySearchEngine();
-const results = search.search('error handling patterns', index, 5);
-
-results.forEach(result => {
-  console.log(`Found in ${result.document.sourceAgent}'s history`);
-  console.log(`Relevance: ${result.relevanceScore}`);
-  console.log(`Matched terms: ${result.matchedTerms.join(', ')}`);
-});
-```
+| Module | Purpose |
+|--------|---------|
+| **PatternExtractor** | Extract n-grams and repeated phrases from team histories with configurable frequency thresholds |
+| **SkillCandidateGenerator** | Generate skill candidates from discovered patterns with built-in deduplication against existing skills |
+| **ApprovalQueue** | Manage pending/approved/rejected candidate workflow with persistent tracking |
+| **SkillMdGenerator** | Auto-generate frontmatter-formatted SKILL.md files with agent attribution and confidence levels |
+| **ConfidenceTracker** | Track skill reuse across agents and sessions; auto-upgrade confidence from low → medium → high |
+| **MemoryIndexer** | Index agent histories and team decisions for full-text search with keyword extraction |
+| **MemorySearchEngine** | Search indexed memory with TF-IDF relevance ranking and matched term highlighting |
+| **StalenessDetector** | Identify and flag outdated patterns not referenced in recent sessions |
+| **KnowledgeOrchestrator** | Coordinate the full discovery → generation → approval → search pipeline |
 
 ## Testing
+
+Run the comprehensive test suite:
 
 ```bash
 # Run all tests
 npm run test
 
-# Run tests in watch mode
+# Run tests in watch mode (for development)
 npm run test:watch
 
-# Run specific test file
+# Run a specific test file
 npm run test test/pattern-extractor.test.ts
 ```
 
-Test coverage includes:
-- Unit tests for each module (pattern extraction, skill generation, search, etc.)
-- Integration tests for full discovery→approval→generation pipeline
-- Edge cases (empty histories, corrupted files, special characters)
+**Test coverage includes:**
+- Unit tests for each module (extraction, generation, search, approval)
+- Integration tests for full discovery→approval→generation workflows
+- Edge cases (empty histories, special characters, corrupted data)
 - Performance tests (1000+ history entries)
 
-## Development Workflow
-
-1. **Make changes** to files in `src/`
-2. **Run TypeScript compiler** to check for type errors: `npm run build`
-3. **Write tests** for new features in `test/`
-4. **Run tests** to verify: `npm run test`
-5. **Review documentation** for needed updates
-
-## API Documentation
-
-Detailed type definitions are in `src/types.ts`:
-
-- **`PatternMatch`** — Extracted phrase with frequency and context
-- **`SkillCandidate`** — Generated candidate skill with metadata
-- **`ApprovedSkill`** — Approved skill with SKILL.md path and tracking data
-- **`MemoryDocument`** — Indexed document from history or decisions
-- **`SearchResult`** — Search query result with ranking and attribution
-- **`StalenessReport`** — Knowledge staleness analysis with recommendations
-
-## Implementation Status
+## Roadmap
 
 ✅ **Implemented:**
-- Pattern extraction from agent histories
+- Pattern extraction with noise filtering and frequency analysis
 - Skill candidate generation with deduplication
-- Approval workflow management
-- SKILL.md generation with agent attribution
-- Confidence tracking through session logs
+- Approval workflow management with tracking
+- SKILL.md generation with frontmatter and attribution
+- Confidence tracking through reuse counts
 - Full-text memory indexing and search
 - Staleness detection and reporting
 - End-to-end orchestration pipeline
-- Comprehensive test suite
+- Comprehensive test suite (48+ tests)
 
-⏳ **Future Work:**
+⏳ **Future:**
 - Semantic similarity for improved deduplication
-- Auto-suggestion of conflicting patterns
+- Auto-suggestion of conflicting/similar patterns
 - Skill quality scoring (specificity, actionability)
-- Batch approval/rejection for large candidate sets
+- Batch approval/rejection UI for large candidate sets
 - Auto-deprecation based on staleness thresholds
-
-## Related Resources
-
-- [QUICKSTART.md](./QUICKSTART.md) — Step-by-step getting started guide
-- [PLAN.md](./PLAN.md) — Detailed TDD implementation plan
-- [@bradygaster/squad-sdk](https://github.com/bradygaster/squad-sdk) — Squad SDK documentation
-- Squad Agent Collection docs — for agent history access
+- GraphQL API for SDK integration
 
 ## License
 
