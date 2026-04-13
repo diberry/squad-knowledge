@@ -2,6 +2,8 @@
 
 Get up and running with pattern discovery, skill approval, and memory search in 5 minutes.
 
+> **Note:** This project demonstrates patterns and algorithms for Squad SDK skill governance. It does not directly import `@bradygaster/squad-sdk` at runtime — the modules are standalone building blocks designed for integration into Squad SDK projects.
+
 ## Prerequisites
 
 - **Node.js** 18.0.0 or later
@@ -96,11 +98,23 @@ import {
   ApprovalQueue,
   SkillMdGenerator,
 } from 'project-squad-sdk-example-knowledge';
-import { AgentsCollection } from '@bradygaster/squad-sdk';
 
-// Step 1: Load agent history
-const agentsCollection = new AgentsCollection(storageProvider);
-const histories = await agentsCollection.loadAll();
+// Step 1: Prepare agent history data
+// In production, load these from your .squad/ directory
+const histories = [
+  'always check for null before accessing properties',
+  'always check for null before accessing properties',
+  'always check for null before accessing properties',
+  'validate user input early before processing',
+  'validate user input early before processing',
+  'validate user input early before processing',
+];
+const metadata = histories.map((h, i) => ({
+  agentName: ['alice', 'bob', 'charlie'][i % 3],
+  sessionId: `session-${i}`,
+  timestamp: new Date(),
+  snippet: h,
+}));
 
 // Step 2: Extract patterns from histories
 const extractor = new PatternExtractor({
@@ -196,35 +210,38 @@ Find knowledge across team history with relevance ranking and attribution.
 ```typescript
 import {
   MemoryIndexer,
-  MemorySearch,
+  MemorySearchEngine,
   StalenessDetector,
 } from 'project-squad-sdk-example-knowledge';
-import { 
-  AgentsCollection,
-  DecisionsCollection,
-  LogCollection,
-} from '@bradygaster/squad-sdk';
 
 // Step 1: Build index
-const agentsCollection = new AgentsCollection(storageProvider);
-const decisionsCollection = new DecisionsCollection(storageProvider);
-const logCollection = new LogCollection(storageProvider);
+const indexer = new MemoryIndexer();
+const histories = new Map<string, string[]>();
+// Populate histories from your agent data
+histories.set('alice', ['always use try-catch around I/O operations...']);
+histories.set('bob', ['consider wrapping third-party errors...']);
+const index = indexer.indexAgentHistories(histories);
 
-const indexer = new MemoryIndexer(
-  agentsCollection,
-  decisionsCollection
+// Also index decisions
+const decisionDocs = indexer.indexDecisions(
+  '## Decision: Standardize error handling\nUse custom error classes.',
+  'team-lead'
 );
-const index = await indexer.buildIndex();
+for (const doc of decisionDocs) {
+  index.documents.push(doc);
+  for (const kw of doc.keywords) {
+    const existing = index.keywordIndex.get(kw) || [];
+    existing.push(doc);
+    index.keywordIndex.set(kw, existing);
+  }
+}
 
 console.log(`Indexed ${index.documents.length} documents`);
 console.log(`Keywords: ${index.keywordIndex.size}`);
-console.log(`Phrases: ${index.phraseIndex.size}`);
 
 // Step 2: Search
-const search = new MemorySearch(index);
-const results = await search.search('error handling strategy', {
-  maxResults: 5,
-});
+const search = new MemorySearchEngine();
+const results = search.search('error handling strategy', index, 5);
 
 console.log(`\nFound ${results.length} results:\n`);
 
@@ -242,8 +259,10 @@ results.forEach((result, i) => {
 });
 
 // Step 4: Check staleness
-const detector = new StalenessDetector(logCollection);
-const staleness = await detector.analyzeKnowledge();
+const detector = new StalenessDetector();
+const reuseData = new Map<string, { lastSession: number; count: number }>();
+// Populate reuseData from your tracking system
+const staleness = detector.generateReport(approvedSkills, reuseData);
 
 console.log(`\nStaleness Report:`);
 staleness.forEach(report => {
@@ -307,7 +326,6 @@ import {
   ConfidenceTracker,
   SkillMdGenerator,
 } from 'project-squad-sdk-example-knowledge';
-import { LogCollection } from '@bradygaster/squad-sdk';
 
 // Step 1: Start with a new skill
 const skill = {
@@ -324,13 +342,19 @@ const skill = {
 console.log(`Created skill: ${skill.title}`);
 console.log(`Initial confidence: ${skill.confidence}`);
 
-// Step 2: Track reuse by analyzing logs
-const logCollection = new LogCollection(storageProvider);
-const tracker = new ConfidenceTracker(logCollection);
+// Step 2: Track reuse across agents
+const tracker = new ConfidenceTracker();
+tracker.initializeSkill(skill as any);
 
-const updatedSkill = await tracker.updateConfidenceFromLogs(skill);
+// Simulate reuse by multiple agents across sessions
+tracker.trackReuse('null-check-skill', 'alice');
+tracker.trackReuse('null-check-skill', 'bob');
+tracker.trackReuse('null-check-skill', 'charlie');
+tracker.trackReuse('null-check-skill', 'alice');
 
-console.log(`\nAfter analyzing logs:`);
+const updatedSkill = tracker.getSkillMetadata('null-check-skill')!;
+
+console.log(`\nAfter tracking reuse:`);
 console.log(`Reuse count: ${updatedSkill.reuseCount}`);
 console.log(`New confidence: ${updatedSkill.confidence}`);
 
@@ -338,16 +362,12 @@ if (updatedSkill.confidence !== skill.confidence) {
   console.log(`✓ Upgraded from ${skill.confidence} to ${updatedSkill.confidence}`);
 }
 
-// Step 3: Get confidence report
-const report = await tracker.getConfidenceReport([skill]);
-
-console.log(`\nConfidence Report:`);
-report.forEach(r => {
-  console.log(`  ${r.skillId}`);
-  console.log(`    Confidence: ${r.confidence}`);
-  console.log(`    Reuse count: ${r.reuseCount}`);
-  console.log(`    Last used: ${r.lastUsed}`);
-});
+// Step 3: Check metadata
+console.log(`\nSkill metadata:`);
+console.log(`  ${updatedSkill.id}`);
+console.log(`    Confidence: ${updatedSkill.confidence}`);
+console.log(`    Reuse count: ${updatedSkill.reuseCount}`);
+console.log(`    Last updated: ${updatedSkill.updatedAt}`);
 ```
 
 ### Expected Output
@@ -356,16 +376,16 @@ report.forEach(r => {
 Created skill: Always Check For Null
 Initial confidence: low
 
-After analyzing logs:
-Reuse count: 7
+After tracking reuse:
+Reuse count: 4
 New confidence: medium
 ✓ Upgraded from low to medium
 
-Confidence Report:
+Skill metadata:
   null-check-skill
     Confidence: medium
-    Reuse count: 7
-    Last used: 2024-01-15T10:30:00Z
+    Reuse count: 4
+    Last updated: 2024-01-15T10:30:00Z
 ```
 
 ## Common Commands
@@ -411,48 +431,45 @@ const patterns = await extractor.extractPatterns(histories);
 ### SkillCandidateGenerator
 
 ```typescript
-const generator = new SkillCandidateGenerator(skillRegistry);
-const candidates = await generator.generateCandidates(patterns);
+const generator = new SkillCandidateGenerator();
+const candidates = generator.generateCandidates(patterns, existingSkillKeywords);
 // Returns: SkillCandidate[] with title, description, confidence
 ```
 
 ### ApprovalQueue
 
 ```typescript
-const queue = new ApprovalQueue(storageProvider);
-await queue.approveCandidate(candidateId);
-await queue.rejectCandidate(candidateId, reason);
-const approved = await queue.getApprovedCandidates();
+const queue = new ApprovalQueue();
+queue.approveCandidate(candidateId);
+queue.rejectCandidate(candidateId, reason);
+const approved = queue.getApprovedCandidates();
 ```
 
-### MemorySearch
+### MemorySearchEngine
 
 ```typescript
-const search = new MemorySearch(index);
-const results = await search.search(query, { maxResults: 10 });
+const search = new MemorySearchEngine();
+const results = search.search(query, index, 10);
 // Returns: SearchResult[] with relevanceScore and attribution
 ```
 
 ### ConfidenceTracker
 
 ```typescript
-const tracker = new ConfidenceTracker(logCollection);
-const skill = await tracker.updateConfidenceFromLogs(skill);
-const report = await tracker.getConfidenceReport([skill]);
+const tracker = new ConfidenceTracker();
+tracker.initializeSkill(skill);
+tracker.trackReuse(skillId, agentName);
+const metadata = tracker.getSkillMetadata(skillId);
 ```
 
 ### KnowledgeOrchestrator (End-to-End)
 
 ```typescript
-const orchestrator = new KnowledgeOrchestrator(
-  extractor,
-  generator,
-  queue,
-  skillGenerator
-);
+const orchestrator = new KnowledgeOrchestrator();
 
-const results = await orchestrator.runDiscoveryThroughApproval();
+const state = await orchestrator.runFullPipeline(entries, metadata);
 // Runs: extract → generate → deduplicate → approve → generate SKILL.md
+// Returns PipelineState with candidates, approvedSkills, generatedContent
 ```
 
 ## Troubleshooting

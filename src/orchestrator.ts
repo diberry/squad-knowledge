@@ -9,7 +9,7 @@ export interface PipelineState {
   phase: 'extraction' | 'generation' | 'approval' | 'skill_creation' | 'complete';
   candidates: SkillCandidate[];
   approvedSkills: ApprovedSkill[];
-  generatedFiles: string[];
+  generatedContent: string[];
 }
 
 export class KnowledgeOrchestrator {
@@ -17,7 +17,7 @@ export class KnowledgeOrchestrator {
     phase: 'extraction',
     candidates: [],
     approvedSkills: [],
-    generatedFiles: [],
+    generatedContent: [],
   };
 
   private extractor = new PatternExtractor();
@@ -52,7 +52,7 @@ export class KnowledgeOrchestrator {
     this.state.phase = 'skill_creation';
     for (const candidate of this.approvalQueue.getApprovedCandidates()) {
       const content = this.skillMdGenerator.generate(candidate);
-      this.state.generatedFiles.push(content);
+      this.state.generatedContent.push(content);
 
       const skill: ApprovedSkill = {
         id: candidate.id,

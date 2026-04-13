@@ -4,6 +4,8 @@
 
 Squad Knowledge Operations combines skill discovery, approval workflows, and intelligent memory search into a unified knowledge management system. It enables AI teams to automatically discover patterns from accumulated agent histories, review and approve new skills, track skill confidence through reuse, and search across team memory with attribution.
 
+> **Note:** This project demonstrates patterns and algorithms for Squad SDK skill governance (pattern extraction, approval workflows, confidence tracking, memory search). It does not directly import or depend on `@bradygaster/squad-sdk` at runtime. The code is designed so these modules can be integrated into a Squad SDK project as building blocks.
+
 ## Features
 
 - **📊 Pattern Extraction**: Extract repeated phrases and patterns from agent histories with frequency analysis and noise filtering
@@ -60,7 +62,7 @@ Squad Knowledge Operations combines skill discovery, approval workflows, and int
 | `SkillMdGenerator` | Generate SKILL.md files with frontmatter and attribution | Implemented |
 | `ConfidenceTracker` | Track skill reuse count and upgrade confidence levels | Implemented |
 | `MemoryIndexer` | Index agent histories and decisions for search | Implemented |
-| `MemorySearch` | Search indexed memory with relevance ranking | Implemented |
+| `MemorySearchEngine` | Search indexed memory with relevance ranking | Implemented |
 | `StalenessDetector` | Detect and flag outdated knowledge | Implemented |
 | `KnowledgeOrchestrator` | Coordinate full discovery→approval→generation pipeline | Implemented |
 
@@ -137,22 +139,16 @@ import {
   PatternExtractor,
   SkillCandidateGenerator,
   KnowledgeOrchestrator,
-  MemorySearch,
+  MemorySearchEngine,
 } from 'project-squad-sdk-example-knowledge';
-import { AgentsCollection, StorageProvider } from '@bradygaster/squad-sdk';
 
-// Initialize with Squad SDK components
-const agentsCollection = new AgentsCollection(storageProvider);
+// Initialize components
 const patterns = new PatternExtractor();
 const candidates = new SkillCandidateGenerator();
-const orchestrator = new KnowledgeOrchestrator(
-  patterns,
-  candidates,
-  storageProvider
-);
+const orchestrator = new KnowledgeOrchestrator();
 
 // Run the full pipeline
-await orchestrator.runDiscoveryThroughApproval();
+const state = await orchestrator.runFullPipeline(entries, metadata);
 ```
 
 ### Configuration Options
@@ -180,32 +176,30 @@ See [QUICKSTART.md](./QUICKSTART.md) for step-by-step guides:
 import { KnowledgeOrchestrator } from 'project-squad-sdk-example-knowledge';
 
 // Run the full discovery pipeline
-const results = await orchestrator.runDiscoveryThroughApproval();
-console.log(`Found ${results.candidates.length} skill candidates`);
+const state = await orchestrator.runFullPipeline(entries, metadata);
+console.log(`Found ${state.candidates.length} skill candidates`);
 
-// Review and approve candidates
-for (const candidate of results.candidates) {
-  console.log(`Title: ${candidate.title}`);
-  console.log(`Contexts: ${candidate.contexts.map(c => c.agentName).join(', ')}`);
-  
-  if (shouldApprove(candidate)) {
-    await orchestrator.approveCandidate(candidate.id);
-  }
+// Review approved skills
+for (const skill of state.approvedSkills) {
+  console.log(`Title: ${skill.title}`);
+  console.log(`Agents: ${skill.agents.join(', ')}`);
 }
 ```
 
 ### Example: Search Agent Memory
 
 ```typescript
-import { MemoryIndexer, MemorySearch } from 'project-squad-sdk-example-knowledge';
+import { MemoryIndexer, MemorySearchEngine } from 'project-squad-sdk-example-knowledge';
 
 // Index all agent history and decisions
-const indexer = new MemoryIndexer(agentsCollection, decisionsCollection);
-const index = await indexer.buildIndex();
+const indexer = new MemoryIndexer();
+const histories = new Map<string, string[]>();
+histories.set('alice', ['always check for null before accessing properties']);
+const index = indexer.indexAgentHistories(histories);
 
 // Search for knowledge
-const search = new MemorySearch(index);
-const results = await search.search('error handling patterns', { maxResults: 5 });
+const search = new MemorySearchEngine();
+const results = search.search('error handling patterns', index, 5);
 
 results.forEach(result => {
   console.log(`Found in ${result.document.sourceAgent}'s history`);

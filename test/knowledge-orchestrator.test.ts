@@ -32,13 +32,13 @@ describe('KnowledgeOrchestrator', () => {
     expect(state.phase).toBe('complete');
     expect(state.candidates.length).toBeGreaterThan(0);
     expect(state.approvedSkills.length).toBeGreaterThan(0);
-    expect(state.generatedFiles.length).toBeGreaterThan(0);
+    expect(state.generatedContent.length).toBeGreaterThan(0);
 
-    // Verify generated files contain valid SKILL.md content
-    for (const file of state.generatedFiles) {
-      expect(file).toContain('---');
-      expect(file).toContain('## Summary');
-      expect(file).toContain('## Examples');
+    // Verify generated content contains valid SKILL.md markup
+    for (const content of state.generatedContent) {
+      expect(content).toContain('---');
+      expect(content).toContain('## Summary');
+      expect(content).toContain('## Examples');
     }
   });
 
