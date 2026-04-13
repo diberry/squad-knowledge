@@ -4,6 +4,9 @@
   "description": "Squad SDK Knowledge Operations - Skill Governance + Memory Search",
   "main": "dist/index.js",
   "type": "module",
+  "bin": {
+    "squad-knowledge": "dist/cli/main.js"
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest",

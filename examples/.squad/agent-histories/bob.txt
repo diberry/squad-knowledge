@@ -1,0 +1,10 @@
+Session 001: Began using async/await instead of callbacks.
+Session 002: Tested null validation. Found several edge cases.
+Session 003: Refactored database layer to use async/await.
+Session 004: Discussed input validation strategy with team.
+Session 005: Always check for null before property access. Critical lesson.
+Session 006: Migrated promise chains to async/await for readability.
+Session 007: Built validation middleware for all API endpoints.
+Session 008: Improved error logging with full stack traces and context.
+Session 009: Used async/await to simplify concurrent operations.
+Session 010: Enforce null checks in code review process.

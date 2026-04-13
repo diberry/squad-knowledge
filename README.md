@@ -15,134 +15,58 @@ git clone https://github.com/bradygaster/project-squad-sdk-example-knowledge.git
 cd project-squad-sdk-example-knowledge
 npm install
 npm run build
+npm link          # makes "squad-knowledge" available globally
 ```
 
-### Pattern Discovery Workflow
+### CLI Commands
 
-Follow these **four configuration-first steps** with your own `.squad/` history and decision files:
+The `squad-knowledge` CLI has four commands:
 
-#### Step 1: Prepare Sample History Files
+| Command | Description |
+|---------|-------------|
+| `squad-knowledge discover <squad-dir>` | Scan agent histories and decisions, generate skill candidates |
+| `squad-knowledge approve <candidate-id>` | Approve a candidate and generate its SKILL.md |
+| `squad-knowledge search <query>` | Search across agent memory |
+| `squad-knowledge status` | Show skill count, confidence levels, stale entries |
 
-Create a `.squad/` directory with sample agent history data:
+### Quick Demo with Sample Data
+
+The repository ships with sample history files in `examples/.squad/`:
 
 ```bash
-mkdir -p .squad/agent-histories .squad/decisions
+# 1. Discover patterns in the sample data
+squad-knowledge discover examples/.squad
+
+# 2. Check what was found
+squad-knowledge status
+
+# 3. Approve a candidate (use the ID from discover output)
+squad-knowledge approve <candidate-id>
+
+# 4. Search team memory
+squad-knowledge search "null safety"
 ```
 
-**`.squad/agent-histories/alice.txt`** — Agent Alice's history log:
-```
-Session 1: Check for null pointers before property access
-Session 2: Always validate input early in the process
-Session 3: Check for null pointers before property access
-Session 4: Use async/await for I/O operations
-Session 5: Check for null pointers before property access
-```
+### Using Your Own Data
 
-**`.squad/agent-histories/bob.txt`** — Agent Bob's history log:
-```
-Session 1: Always validate input early in the process
-Session 2: Use async/await for I/O operations
-Session 3: Check for null pointers before property access
-Session 4: Log errors with full context for debugging
-Session 5: Prefer immutable data structures
-```
-
-**`.squad/decisions/2024-01-15-error-handling.md`** — Team decision log:
-```markdown
-# Decision: Error Handling Strategy
-
-Date: 2024-01-15
-Author: team-lead
-
-Always wrap I/O operations in try-catch blocks.
-Log errors with full context including stack traces.
-Use custom error classes for domain-specific errors.
-```
-
-#### Step 2: Run Pattern Discovery
+Point the CLI at any `.squad/` directory that contains:
+- `agent-histories/*.txt` — one file per agent, one session per line
+- `decisions/*.md` — team decision documents
 
 ```bash
-# Discover patterns in agent histories
-node dist/pattern-extractor.js .squad/agent-histories
-
-# Generate skill candidates from patterns
-node dist/skill-candidate-generator.js .squad/agent-histories
+squad-knowledge discover .squad
+squad-knowledge status
+squad-knowledge approve <candidate-id>
+squad-knowledge search "error handling"
 ```
 
-**Expected output:**
-```
-Found 8 patterns:
-  • "check for null pointers" (5 occurrences, 3 agents)
-  • "validate input early" (4 occurrences, 2 agents)
-  • "use async/await" (3 occurrences, 2 agents)
-
-Generated 5 skill candidates
-```
-
-#### Step 3: Review and Approve Candidates
-
-```bash
-# List pending candidates for review
-node dist/list-candidates.js
-
-# Approve a skill candidate
-node dist/approve-candidate.js <candidate-id>
-
-# Reject a candidate with reason
-node dist/reject-candidate.js <candidate-id> "Pattern too vague"
-```
-
-**Expected output:**
-```
-Pending Candidates:
-[abc12345] Check For Null Pointers (confidence: low) — agents: alice, bob, charlie
-[def67890] Validate Input Early (confidence: low) — agents: alice, bob
-[ghi11111] Use Async/Await For I/O (confidence: low) — agents: bob, charlie
-
-✅ Candidate abc12345 approved.
-Generated SKILL.md at .squad/skills/check-for-null-pointers.md
-```
-
-#### Step 4: Search Team Memory
-
-```bash
-# Index all agent histories and decisions
-node dist/build-memory-index.js .squad/
-
-# Search across team memory
-node dist/search-memory.js "error handling patterns"
-```
-
-**Expected output:**
-```
-Found 3 results:
-
-1. Relevance: 92%
-   Source: alice (agent_history) — 2024-01-14
-   Matched: error, handling, patterns
-   "Always wrap I/O operations in try-catch blocks..."
-
-2. Relevance: 76%
-   Source: decisions — 2024-01-12
-   Matched: error, handling
-   "Decision: Standardize error handling across services..."
-
-3. Relevance: 61%
-   Source: bob (agent_history) — 2024-01-10
-   Matched: patterns
-   ⚠️  STALE: Not referenced in last 15 sessions
-   "Consider wrapping third-party errors..."
-```
-
-### Output — No Code Required
+### Output
 
 All outputs are:
 - **SKILL.md files** in `.squad/skills/` with frontmatter and agent attribution
-- **Search results** with relevance scores and source links
+- **Search results** with relevance scores and source attribution
 - **Staleness reports** flagging outdated patterns
-- **Approval queue** tracking pending/approved candidates
-
-No custom code or API imports needed to use the workflow.
+- **candidates.json** and **memory-index.json** for state persistence
 
 ## Architecture
 
@@ -154,21 +78,19 @@ Extend the base pattern extractor to recognize domain-specific phrases:
 
 ```typescript
 import { PatternExtractor } from 'project-squad-sdk-example-knowledge';
+import type { PatternMatch, PatternContext } from 'project-squad-sdk-example-knowledge';
 
 class DomainPatternExtractor extends PatternExtractor {
-  protected async preprocessText(text: string): Promise<string> {
-    // Custom tokenization for your domain (e.g., SQL queries, API calls)
-    return text.toLowerCase().replace(/my_domain_specific_pattern/g, 'DOMAIN_TOKEN');
-  }
-
-  async extractPatterns(histories: string[]) {
-    const standard = await super.extractPatterns(histories);
-    const domain = this.findDomainPatterns(histories);
+  extract(entries: string[], metadata: PatternContext[]): PatternMatch[] {
+    // Run the standard n-gram extraction
+    const standard = super.extract(entries, metadata);
+    // Add domain-specific patterns
+    const domain = this.findDomainPatterns(entries, metadata);
     return [...standard, ...domain];
   }
 
-  private findDomainPatterns(histories: string[]) {
-    // Your custom extraction logic here
+  private findDomainPatterns(entries: string[], metadata: PatternContext[]): PatternMatch[] {
+    // Your custom extraction logic here (e.g., SQL queries, API calls)
     return [];
   }
 }
@@ -215,18 +137,19 @@ import {
   MemorySearchEngine,
   KnowledgeOrchestrator,
 } from 'project-squad-sdk-example-knowledge';
+import type { PatternContext } from 'project-squad-sdk-example-knowledge';
 
 // Phase 1: Discovery
-const extractor = new PatternExtractor({ minFrequency: 3 });
-const patterns = await extractor.extractPatterns(histories);
+const extractor = new PatternExtractor(3, 3);  // minFrequency, minPhraseLength
+const patterns = extractor.extract(entries, metadata);
 
 // Phase 2: Generation
 const generator = new SkillCandidateGenerator();
-const candidates = await generator.generateCandidates(patterns);
+const candidates = generator.generateCandidates(patterns, existingSkillKeywords);
 
 // Phase 3: Search
 const indexer = new MemoryIndexer();
-const index = indexer.indexAgentHistories(agentHistories);
+const index = indexer.indexAgentHistories(agentHistories);  // Map<string, string[]>
 const search = new MemorySearchEngine();
 const results = search.search('error handling', index, 10);
 
@@ -240,10 +163,16 @@ const state = await orchestrator.runFullPipeline(entries, metadata);
 ```
 project-squad-sdk-example-knowledge/
 ├── README.md                         # This file
-├── QUICKSTART.md                     # Configuration-first setup guide
-├── PLAN.md                           # Implementation plan
-├── package.json                      # Dependencies and scripts
+├── QUICKSTART.md                     # Setup guide
+├── package.json                      # Dependencies, scripts, bin entry
 ├── tsconfig.json                     # TypeScript configuration
+├── examples/
+│   └── .squad/                       # Sample data for demo
+│       ├── agent-histories/
+│       │   ├── alice.txt
+│       │   └── bob.txt
+│       └── decisions/
+│           └── 2024-01-error-strategy.md
 ├── src/
 │   ├── index.ts                      # Main exports
 │   ├── types.ts                      # Type definitions
@@ -256,20 +185,11 @@ project-squad-sdk-example-knowledge/
 │   ├── memory-search.ts              # Search and ranking
 │   ├── staleness-detector.ts         # Staleness detection
 │   ├── orchestrator.ts               # End-to-end pipeline
-│   └── cli.ts                        # CLI interface
+│   ├── cli.ts                        # Programmatic CLI interface
+│   └── cli/
+│       └── main.ts                   # CLI entry point (bin)
 └── test/
-    ├── pattern-extractor.test.ts
-    ├── skill-candidate-generator.test.ts
-    ├── approval-queue.test.ts
-    ├── skill-md-generator.test.ts
-    ├── confidence-tracker.test.ts
-    ├── memory-indexer.test.ts
-    ├── memory-search.test.ts
-    ├── staleness-detector.test.ts
-    ├── knowledge-orchestrator.test.ts
-    ├── cli.test.ts
-    ├── integration.test.ts
-    └── edge-cases.test.ts
+    └── *.test.ts                     # 48+ tests
 ```
 
 ## SDK Modules
