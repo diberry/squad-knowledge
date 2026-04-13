@@ -1,27 +1,55 @@
 import { SkillCandidate } from './types';
 
 export class ApprovalQueue {
+  private pendingCandidates: SkillCandidate[] = [];
+  private approvedCandidates: SkillCandidate[] = [];
+
+  constructor(initialCandidates?: SkillCandidate[]) {
+    if (initialCandidates) {
+      this.pendingCandidates = initialCandidates.map(c => ({ ...c, approvalStatus: c.approvalStatus || 'pending' as const }));
+    }
+  }
+
   loadPendingCandidates(): SkillCandidate[] {
-    // TODO: Load from .squad/pending-candidates.json
-    return [];
+    return this.pendingCandidates.filter(c => c.approvalStatus === 'pending');
+  }
+
+  loadFromStorage(data: SkillCandidate[]): void {
+    this.pendingCandidates = data.map(c => ({ ...c }));
   }
 
   approveCandidate(id: string): void {
-    // TODO: Mark candidate as approved in storage
-    // TODO: Move to approved queue
+    const candidate = this.pendingCandidates.find(c => c.id === id);
+    if (!candidate) throw new Error(`Candidate ${id} not found`);
+    candidate.approvalStatus = 'approved';
+    this.approvedCandidates.push(candidate);
   }
 
   rejectCandidate(id: string, reason: string): void {
-    // TODO: Mark candidate as rejected with reason
+    const candidate = this.pendingCandidates.find(c => c.id === id);
+    if (!candidate) throw new Error(`Candidate ${id} not found`);
+    candidate.approvalStatus = 'rejected';
+    candidate.rejectionReason = reason;
   }
 
   isApproved(id: string): boolean {
-    // TODO: Check approval status
-    return false;
+    const candidate = this.pendingCandidates.find(c => c.id === id);
+    return candidate?.approvalStatus === 'approved';
   }
 
   getPendingCount(): number {
-    // TODO: Return count of pending candidates
-    return 0;
+    return this.pendingCandidates.filter(c => c.approvalStatus === 'pending').length;
+  }
+
+  getApprovedCandidates(): SkillCandidate[] {
+    return this.approvedCandidates;
+  }
+
+  getRejectedCandidates(): SkillCandidate[] {
+    return this.pendingCandidates.filter(c => c.approvalStatus === 'rejected');
+  }
+
+  getAllCandidates(): SkillCandidate[] {
+    return [...this.pendingCandidates];
   }
 }
