@@ -1,0 +1,26 @@
+{
+  "name": "project-squad-sdk-example-knowledge",
+  "version": "0.1.0",
+  "description": "Squad SDK Knowledge Operations - Skill Governance + Memory Search",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest",
+    "test:watch": "vitest --watch"
+  },
+  "dependencies": {
+    "@bradygaster/squad-sdk": "*",
+    "@bradygaster/squad-cli": "*"
+  },
+  "devDependencies": {
+    "vitest": "^1.0.0",
+    "typescript": "^5.3.0"
+  },
+  "keywords": [
+    "squad-sdk",
+    "knowledge-operations",
+    "skill-governance",
+    "memory-search"
+  ]
+}
